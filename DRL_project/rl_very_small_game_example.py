@@ -1,28 +1,13 @@
-# Copyright 2018 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""A simple episode runner using the RL environment."""
-
 from __future__ import print_function
 
 import sys
 import getopt
+
 from hanabi_learning_environment import rl_env
 from hanabi_learning_environment.agents.random_agent import RandomAgent
 from hanabi_learning_environment.agents.simple_agent import SimpleAgent
 
 AGENT_CLASSES = {'SimpleAgent': SimpleAgent, 'RandomAgent': RandomAgent}
-
 
 class Runner(object):
   """Runner class"""
@@ -31,7 +16,11 @@ class Runner(object):
     """Initialize runner."""
     self.flags = flags
     self.agent_config = {'players': flags['players']}
-    self.environment = rl_env.make('Hanabi-Full', num_players=flags['players'])
+    self.environment = rl_env.make('Hanabi-Very-Small', num_players=flags['players'])
+
+    # Note in Hanabi-very-small, each player has only 2 cards, there are 3 information_tokens and 1 life token. The deck has size 10 (1 of each card up to 5).
+
+
     self.agent_class = AGENT_CLASSES[flags['agent_class']]
 
   def run(self):
@@ -39,6 +28,7 @@ class Runner(object):
     rewards = []
     for episode in range(flags['num_episodes']):
       observations = self.environment.reset()
+      print(observations)
       agents = [self.agent_class(self.agent_config)
                 for _ in range(self.flags['players'])]
       done = False
@@ -64,7 +54,8 @@ class Runner(object):
     return rewards
 
 if __name__ == "__main__":
-  flags = {'players': 2, 'num_episodes': 100, 'agent_class': 'SimpleAgent'}
+
+  flags = {'players': 2, 'num_episodes': 1, 'agent_class': 'SimpleAgent'}
   options, arguments = getopt.getopt(sys.argv[1:], '',
                                      ['players=',
                                       'num_episodes=',
