@@ -4,8 +4,8 @@ import sys
 import getopt
 
 from hanabi_learning_environment import rl_env
-from hanabi_learning_environment.agents.random_agent import RandomAgent
-from hanabi_learning_environment.agents.simple_agent import SimpleAgent
+from myAgents.random_agent import RandomAgent
+from myAgents.simple_agent import SimpleAgent
 
 AGENT_CLASSES = {'SimpleAgent': SimpleAgent, 'RandomAgent': RandomAgent}
 
@@ -15,11 +15,10 @@ class Runner(object):
   def __init__(self, flags):
     """Initialize runner."""
     self.flags = flags
-    self.agent_config = {'players': flags['players']}
     self.environment = rl_env.make('Hanabi-Very-Small', num_players=flags['players'])
-
+    self.agent_config = {'players': flags['players'], 'information_tokens': 3}
+    
     # Note in Hanabi-very-small, each player has only 2 cards, there are 3 information_tokens and 1 life token. The deck has size 10 (1 of each card up to 5).
-
 
     self.agent_class = AGENT_CLASSES[flags['agent_class']]
 
@@ -28,7 +27,6 @@ class Runner(object):
     rewards = []
     for episode in range(flags['num_episodes']):
       observations = self.environment.reset()
-      print(observations)
       agents = [self.agent_class(self.agent_config)
                 for _ in range(self.flags['players'])]
       done = False
@@ -55,7 +53,7 @@ class Runner(object):
 
 if __name__ == "__main__":
 
-  flags = {'players': 2, 'num_episodes': 1, 'agent_class': 'SimpleAgent'}
+  flags = {'players': 2, 'num_episodes': 10, 'agent_class': 'SimpleAgent'}
   options, arguments = getopt.getopt(sys.argv[1:], '',
                                      ['players=',
                                       'num_episodes=',
