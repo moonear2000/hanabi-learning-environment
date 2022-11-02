@@ -5,7 +5,7 @@ from hanabi_learning_environment.rl_env import Agent
 class GreedyAgent(Agent):
   """Agent that takes random legal actions."""
 
-  def __init__(self, config, epsilon=0.5, *args, **kwargs):
+  def __init__(self, config, epsilon=0, *args, **kwargs):
     """Initialize the agent."""
     self.config = config
     # epsilon determines how much exploration is done

@@ -6,6 +6,9 @@ import json
 import io
 import os
 from tqdm import tqdm
+import numpy as np
+import random
+
 
 import rl_env
 from myAgents.epsilon_greedy import GreedyAgent
@@ -22,9 +25,9 @@ class Trainer(object):
     self.flags = flags
     self.environment = rl_env.make('Hanabi-Very-Small', num_players=flags['players'])
     self.agent_config = {'players': flags['players'], 'information_tokens': 3}
-    self.epsilon = 0.5
+    self.epsilon_initial = 0.9 # explores 'epsilon' of the time
     self.agent_class = GreedyAgent
-    self.gamma = 0.9
+    self.gamma = 0.8
     self.lr = 0.1
     dirname = os.path.dirname(__file__)
     self.filename = os.path.join(dirname, 'tables/q_table.json')
@@ -102,7 +105,7 @@ class Trainer(object):
     
     old_q = self.find_q(old_state, action)
     new_q = self.find_q(new_state)
-    q = old_q + self.lr *(reward + self.gamma*(new_q - old_q))
+    q = old_q + self.lr *(reward + self.gamma*(new_q) - old_q)
 
     for a in self.q_table[old_state]:
         if a['action'] == action:
@@ -113,15 +116,86 @@ class Trainer(object):
     for a in legal_moves:
         self.q_table[state].append({'action': a, 'value': 0})
 
-  
-  def train(self):
+  def evaluate(self):
+
+    num_games = 10000
+    rewards = np.zeros(num_games)
+    print(self.q_table['X'])
+
+    for game in range(num_games):
+        observations = self.environment.reset()
+        agents = [self.agent_class(self.agent_config, 1) for _ in range(self.flags['players'])]
+        done = False
+        episode_reward = 0
+        while not done:
+            for agent_id, agent in enumerate(agents):
+                if observations['player_observations'][agent_id]['current_player_offset'] == 0:
+                    observation = observations['player_observations'][agent_id]
+                    state = self.encode_state(observation)
+                    if state not in self.q_table:
+                        action = random.choice(observation['legal_moves'])
+                    else:
+                        action = agent.act(observation, state, self.q_table)
+                    observations, reward, done, unused_info = self.environment.step(action)
+                    break
+            episode_reward += reward
+        rewards[game] = episode_reward
+    
+    average_score = np.mean(rewards)
+    print('The average score across {} games is {}'.format(num_games, average_score))
+
+  def play_games(self, num_games = 10):
     "Run episodes"
     rewards = []
-    for episode in tqdm(range(self.flags['num_episodes'])):
+    for episode in range(num_games):
         # Reset game
         observations = self.environment.reset()
         # Create agents
-        agents = [self.agent_class(self.agent_config, self.epsilon) for _ in range(self.flags['players'])]
+        agents = [self.agent_class(self.agent_config, 0) for _ in range(self.flags['players'])]
+        done = False
+        episode_reward = 0
+        # q-parameters
+        old_state = 'X'
+        reward = 0
+        action = 'Start Game'
+        # Start game
+        while not done:
+            # At each turn, iterate through all agents
+            for agent_id, agent in enumerate(agents):
+                
+                # Only proceed for current agent
+                if observations['player_observations'][agent_id]['current_player_offset'] == 0:
+                    # Find that agents observations
+                    observation = observations['player_observations'][agent_id]
+                    new_state = self.encode_state(observation)
+                    if new_state not in self.q_table:
+                        self.add_state_to_table(new_state, observation['legal_moves'])
+                    action = agent.act(observation, new_state, self.q_table)
+                    for a in self.q_table[new_state]:
+                        if a['action'] == action:
+                            print(a['value'])
+                    assert action is not None
+                    print('Agent: {} action: {}'.format(observation['current_player'],
+                                            action))
+                    observations, reward, done, unused_info = self.environment.step(action)
+                    break
+
+            old_state = new_state
+            # Note when playing a correct card, reward is +1
+            episode_reward += reward
+        rewards.append(episode_reward)
+        print('Reward = {}'.format(episode_reward))
+
+  def train(self):
+    "Run episodes"
+    rewards = []
+    num_ep = self.flags['num_episodes']
+    for episode in tqdm(range(num_ep)):
+        # Reset game
+        observations = self.environment.reset()
+        # Create agents
+        epsilon = self.epsilon_initial * np.exp(-(episode)/(num_ep/4))
+        agents = [self.agent_class(self.agent_config, epsilon) for _ in range(self.flags['players'])]
         done = False
         episode_reward = 0
         # q-parameters
@@ -151,7 +225,6 @@ class Trainer(object):
             old_state = new_state
             # Note when playing a correct card, reward is +1
             episode_reward += reward
-        rewards.append(episode_reward)
         if episode%200000 == 0:
             print('Saving table')
             try:
@@ -162,7 +235,7 @@ class Trainer(object):
 
 if __name__ == "__main__":
 
-  flags = {'players': 2, 'num_episodes': 1000000, 'agent_class': 'RandomAgent'}
+  flags = {'players': 2, 'num_episodes': 10000000, 'agent_class': 'RandomAgent'}
   options, arguments = getopt.getopt(sys.argv[1:], '',
                                      ['players=',
                                       'num_episodes=',
@@ -171,4 +244,4 @@ if __name__ == "__main__":
     flag = flag[2:]  # Strip leading --.
     flags[flag] = type(flags[flag])(value)
   runner = Trainer(flags)
-  runner.train()
+  runner.evaluate()
