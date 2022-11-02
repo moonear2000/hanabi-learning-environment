@@ -3,7 +3,7 @@ from __future__ import print_function
 import sys
 import getopt
 
-from hanabi_learning_environment import rl_env
+import rl_env
 from myAgents.random_agent import RandomAgent
 from myAgents.simple_agent import SimpleAgent
 
@@ -46,6 +46,7 @@ class Runner(object):
         observations, reward, done, unused_info = self.environment.step(
             current_player_action)
         episode_reward += reward
+      print(observations)
       rewards.append(episode_reward)
       print('Running episode: %d' % episode)
       print('Max Reward: %.3f' % max(rewards))
@@ -53,7 +54,7 @@ class Runner(object):
 
 if __name__ == "__main__":
 
-  flags = {'players': 2, 'num_episodes': 10, 'agent_class': 'SimpleAgent'}
+  flags = {'players': 2, 'num_episodes': 1, 'agent_class': 'RandomAgent'}
   options, arguments = getopt.getopt(sys.argv[1:], '',
                                      ['players=',
                                       'num_episodes=',

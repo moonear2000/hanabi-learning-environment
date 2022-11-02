@@ -569,7 +569,7 @@ def make(environment_name="Hanabi-Full", num_players=2, pyhanabi_path=None):
             "colors":
                 1,
             "ranks":
-                3,
+                5,
             "players":
                 num_players,
             "hand_size":

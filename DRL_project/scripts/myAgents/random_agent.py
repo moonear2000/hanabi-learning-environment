@@ -27,7 +27,6 @@ class RandomAgent(Agent):
   def act(self, observation):
     """Act based on an observation."""
     if observation['current_player_offset'] == 0:
-      print(observation['card_knowledge'])
       return random.choice(observation['legal_moves'])
     else:
       return None
