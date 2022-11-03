@@ -129,7 +129,7 @@ class Trainer(object):
     unvisited_states = 0
     for game in range(num_games):
         observations = self.environment.reset()
-        agents = [self.agent_class(self.agent_config, 1) for _ in range(self.flags['players'])]
+        agents = [self.agent_class(self.agent_config, 0) for _ in range(self.flags['players'])]
         done = False
         episode_reward = 0
         while not done:
