@@ -2,8 +2,7 @@ from __future__ import print_function
 
 import sys
 import getopt
-import json
-import io
+import pickle
 import os
 from tqdm import tqdm
 import numpy as np
@@ -28,16 +27,23 @@ class Trainer(object):
     self.epsilon_initial = 0.9 # explores 'epsilon' of the time
     self.agent_class = GreedyAgent
     self.gamma = 0.8
-    self.lr = 0.1
+    self.lr_initial = 0.85 #fast learning
     dirname = os.path.dirname(__file__)
-    self.filename = os.path.join(dirname, 'tables/q_table.json')
+    self.filename = os.path.join(dirname, 'tables/q_table.pickle')
     try:
-        with open(self.filename, 'r') as fp:
-            self.q_table = json.load(fp)
+        with open(self.filename, 'rb') as fp:
+            self.q_table = pickle.load(fp)
     except IOError:
         print('No old table found, starting a new table')
         self.q_table = {}
     
+  def learning_rate(self, iteration, total_iterations):
+    alpha = self.lr_initial * np.exp(-(iteration)*4/total_iterations)
+    if alpha < 0.1:
+        return 0.1
+    else:
+        return alpha
+
   def encode_state(self, observation):
     # The purpose of this function is to encode the state into a string that can be used as a key to the q_dict
 
@@ -101,11 +107,11 @@ class Trainer(object):
                 return a['value']
         return 0
 
-  def update_q_table(self, old_state, new_state, action, reward):
+  def update_q_table(self, old_state, new_state, action, reward, lr):
     
     old_q = self.find_q(old_state, action)
     new_q = self.find_q(new_state)
-    q = old_q + self.lr *(reward + self.gamma*(new_q) - old_q)
+    q = old_q + lr *(reward + self.gamma*(new_q) - old_q)
 
     for a in self.q_table[old_state]:
         if a['action'] == action:
@@ -120,11 +126,10 @@ class Trainer(object):
 
     num_games = 10000
     rewards = np.zeros(num_games)
-    print(self.q_table['X'])
-
+    unvisited_states = 0
     for game in range(num_games):
         observations = self.environment.reset()
-        agents = [self.agent_class(self.agent_config, 1) for _ in range(self.flags['players'])]
+        agents = [self.agent_class(self.agent_config, 0) for _ in range(self.flags['players'])]
         done = False
         episode_reward = 0
         while not done:
@@ -133,9 +138,11 @@ class Trainer(object):
                     observation = observations['player_observations'][agent_id]
                     state = self.encode_state(observation)
                     if state not in self.q_table:
+                        unvisited_states += 1
                         action = random.choice(observation['legal_moves'])
+                        
                     else:
-                        action = agent.act(observation, state, self.q_table)
+                        action = agent.act(state, self.q_table)
                     observations, reward, done, unused_info = self.environment.step(action)
                     break
             episode_reward += reward
@@ -143,6 +150,7 @@ class Trainer(object):
     
     average_score = np.mean(rewards)
     print('The average score across {} games is {}'.format(num_games, average_score))
+    print('{} unvisited states'.format(unvisited_states))
 
   def play_games(self, num_games = 10):
     "Run episodes"
@@ -192,10 +200,12 @@ class Trainer(object):
     num_ep = self.flags['num_episodes']
     for episode in tqdm(range(num_ep)):
         # Reset game
+        lr = self.learning_rate(episode, num_ep)
         observations = self.environment.reset()
         # Create agents
         epsilon = self.epsilon_initial * np.exp(-(episode)/(num_ep/4))
         agents = [self.agent_class(self.agent_config, epsilon) for _ in range(self.flags['players'])]
+        state_log = {0: [('X','Start Game')], 1:[('X','Start Game')]}
         done = False
         episode_reward = 0
         # q-parameters
@@ -208,7 +218,6 @@ class Trainer(object):
         while not done:
             # At each turn, iterate through all agents
             for agent_id, agent in enumerate(agents):
-                
                 # Only proceed for current agent
                 if observations['player_observations'][agent_id]['current_player_offset'] == 0:
                     # Find that agents observations
@@ -216,8 +225,9 @@ class Trainer(object):
                     new_state = self.encode_state(observation)
                     if new_state not in self.q_table:
                         self.add_state_to_table(new_state, observation['legal_moves'])
-                    self.update_q_table(old_state, new_state, action, reward)
-                    action = agent.act(observation, new_state, self.q_table)
+                    self.update_q_table(state_log[agent_id][-1][0], new_state, state_log[agent_id][-1][1], reward, lr)
+                    action = agent.act(new_state, self.q_table)
+                    state_log[agent_id].append((new_state, action))
                     assert action is not None
                     observations, reward, done, unused_info = self.environment.step(action)
                     break
@@ -228,8 +238,8 @@ class Trainer(object):
         if episode%200000 == 0:
             print('Saving table')
             try:
-                with open(self.filename, 'w') as fp:
-                    json.dump(self.q_table, fp, sort_keys=True, indent=4)
+                with open(self.filename, 'wb') as fp:
+                    pickle.dump(self.q_table, fp, protocol=pickle.HIGHEST_PROTOCOL)
             except:
                 print('Could not save')
 
@@ -244,4 +254,4 @@ if __name__ == "__main__":
     flag = flag[2:]  # Strip leading --.
     flags[flag] = type(flags[flag])(value)
   runner = Trainer(flags)
-  runner.evaluate()
+  runner.train()
