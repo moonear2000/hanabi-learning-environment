@@ -124,7 +124,7 @@ class Trainer(object):
 
   def evaluate(self):
 
-    num_games = 50000
+    num_games = 20000
     rewards = np.zeros(num_games)
     unvisited_states = 0
     for game in range(num_games):
@@ -152,6 +152,7 @@ class Trainer(object):
         rewards[game] = episode_reward
     
     average_score = np.mean(rewards)
+    print('Initial state value = {}'.format(self.q_table['X']))
     print('The average score across {} games is {}'.format(num_games, average_score))
     print('{} unvisited states'.format(unvisited_states))
 
@@ -196,7 +197,7 @@ class Trainer(object):
             # Note when playing a correct card, reward is +1
             episode_reward += reward
         rewards.append(episode_reward)
-        print('Reward = {}'.format(episode_reward))
+        print('Episode Reward = {}'.format(episode_reward))
 
   def train(self):
 
@@ -223,7 +224,6 @@ class Trainer(object):
     for episode in tqdm(range(1000000)):
         # Reset game
         lr = 0.15
-        epsilon_decay = 1
         observations = self.environment.reset()
 
         # Create agents
@@ -254,22 +254,22 @@ class Trainer(object):
         if episode_reward == 0:
             final_reward = -100
         else: 
-            final_reward = episode_reward
+            final_reward = episode_reward*10
         
         for agent_id, agent in enumerate(agents):
             self.update_q_table(state_log[agent_id][-1][0], 'Terminal', state_log[agent_id][-1][1], final_reward, lr=lr)
 
     self.evaluate()
+    epsilon_decay = np.exp(np.log(0.001)/num_episodes)
+    epsilon = 1
 
     for episode in tqdm(range(num_episodes)):
         # Reset game
         lr = 0.15
-        epsilon_decay = 0.999
         observations = self.environment.reset()
 
         # Create agents
         # TO-DO: Change so that epsilon is set based on the number of times a state has been visited
-        epsilon = self.epsilon_initial * np.exp(-(episode)/(num_episodes/4)) 
         agents = [self.agent_class(self.agent_config, epsilon) for _ in range(self.flags['players'])]
         state_log = {0: [('X','Start Game')], 1:[('X','Start Game')]}
         done = False
@@ -285,7 +285,6 @@ class Trainer(object):
                     new_state = self.encode_state(observation)
                     if new_state not in self.q_table:
                         self.add_state_to_table(new_state, observation['legal_moves'])
-                    agent.epsilon = max(self.q_table[new_state]['e'], epsilon)
                     self.q_table[new_state]['e'] *= epsilon_decay
                     self.update_q_table(state_log[agent_id][-1][0], new_state, state_log[agent_id][-1][1], sum(rewards[-2:]), lr=lr)
                     action = agent.act(new_state, self.q_table)
@@ -294,15 +293,16 @@ class Trainer(object):
                     break
             if reward == 1: episode_reward += reward
         
-        # Adjust final states
+        # Adjust terminal states
         if episode_reward == 0:
             final_reward = -100
         else: 
-            final_reward = episode_reward
+            final_reward = episode_reward*10
         
         for agent_id, agent in enumerate(agents):
             self.update_q_table(state_log[agent_id][-1][0], 'Terminal', state_log[agent_id][-1][1], final_reward, lr=lr)
 
+        epsilon *= epsilon_decay
             
         if episode%200000 == 0:
             print('Saving table')
@@ -315,7 +315,7 @@ class Trainer(object):
 
 if __name__ == "__main__":
 
-  flags = {'players': 2, 'num_episodes': 1000000, 'agent_class': 'RandomAgent'}
+  flags = {'players': 2, 'num_episodes': 5000000, 'agent_class': 'RandomAgent'}
   options, arguments = getopt.getopt(sys.argv[1:], '',
                                      ['players=',
                                       'num_episodes=',
