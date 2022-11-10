@@ -1,4 +1,5 @@
 import random
+import math
 from hanabi_learning_environment.rl_env import Agent
 
 
@@ -15,12 +16,12 @@ class GreedyAgent(Agent):
     """Act based on an observation, and q_table."""
     # Explore with probability epsilon
     if random.uniform(0,1)<self.epsilon:
-        random_action = random.choice(q_table[encoded_state])
+        random_action = random.choice(q_table[encoded_state]['actions'])
         return random_action['action']
     else:
         best_actions = []
-        best_value = -1
-        for action in q_table[encoded_state]:
+        best_value = -math.inf
+        for action in q_table[encoded_state]['actions']:
             if action['value']>best_value:
               best_actions = [action['action']]
               best_value = action['value']
