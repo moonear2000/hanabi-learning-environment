@@ -60,7 +60,8 @@ class Trainer(object):
     for card in observation['discard_pile']:
         discard_pile += str(card['rank'])
     state += 'X'*(10 - len(discard_pile)) + ''.join(sorted(discard_pile))
-    # current agent hand knowledge:
+
+    # current agent hand knowledge (must be sorted)
     hand_knowledge = ''
     for card in observation['card_knowledge'][0]:
         if card['rank'] == None:
@@ -69,15 +70,17 @@ class Trainer(object):
         hand_knowledge += str(card['rank'])
     if len(hand_knowledge)<2:
         hand_knowledge += 'X'
-    state += ''.join(sorted(hand_knowledge))
-    # his hand
+    state += hand_knowledge
+
+    # his hand (unsorted)
     hand = ''
     for card in observation['observed_hands'][-1]:
         hand += str(card['rank'])
     if len(hand) <2:
         hand += 'X'
     state += ''.join(sorted(hand))
-    # his hand knowledge"
+
+    # his hand knowledge (unsorted)
     hand_knowledge = ''
     for card in observation['card_knowledge'][1]:
         if card['rank'] == None:
@@ -120,7 +123,8 @@ class Trainer(object):
   def add_state_to_table(self, state, legal_moves):
     self.q_table[state] = {'actions':[], 'e':1}
     for a in legal_moves:
-        self.q_table[state]['actions'].append({'action': a, 'value': 0})
+        if 'COLOR' != a['action_type'][-5:]: # Do not add revealing color as a legal action (as it is irrelevant in this game)
+            self.q_table[state]['actions'].append({'action': a, 'value': 0})
 
   def evaluate(self):
 
@@ -156,7 +160,7 @@ class Trainer(object):
     print('The average score across {} games is {}'.format(num_games, average_score))
     print('{} unvisited states'.format(unvisited_states))
 
-  def play_games(self, num_games = 10):
+  def play_games(self, num_games = 5):
     "Run episodes"
     rewards = []
     for episode in range(num_games):
@@ -190,12 +194,14 @@ class Trainer(object):
                     assert action is not None
                     print('Agent: {} action: {}'.format(observation['current_player'],
                                             action))
+                    #print('Legal Moves: {}'.format(observation['legal_moves']))
+                    #print('His knowledge: {}'.format(observation['card_knowledge'][1]))
+
                     observations, reward, done, unused_info = self.environment.step(action)
                     break
 
-            old_state = new_state
             # Note when playing a correct card, reward is +1
-            episode_reward += reward
+            if reward == 1: episode_reward += reward
         rewards.append(episode_reward)
         print('Episode Reward = {}'.format(episode_reward))
 
@@ -211,7 +217,7 @@ class Trainer(object):
     # The idea behind 2 is to discourage playing moves that may result in a loss (i.e playing cards you don't know). Instead, only play cards you know, otherwise discard
     # The idea behind 3 is to add a terminal reward at terminal states that can backpropogate through the state tree. Rewards given during gameplay are guidance towards terminal states.
     
-    num_episodes = self.flags['num_episodes']
+    
 
     if 'X' not in self.q_table:
             self.add_state_to_table('X', ['Start Game'])
@@ -219,16 +225,16 @@ class Trainer(object):
     if 'Terminal' not in self.q_table:
             self.add_state_to_table('Terminal', ['Invalid'])
 
-
+    num_episodes = 1
     # Initial fully exploration phase
-    for episode in tqdm(range(1000000)):
+    for episode in tqdm(range(num_episodes)):
         # Reset game
-        lr = 0.15
+        lr = 0.1
         observations = self.environment.reset()
 
         # Create agents
         # TO-DO: Change so that epsilon is set based on the number of times a state has been visited
-        agents = [self.agent_class(self.agent_config, 1) for _ in range(self.flags['players'])]
+        agents = [self.agent_class(self.agent_config, 0.2) for _ in range(self.flags['players'])]
         state_log = {0: [('X','Start Game')], 1:[('X','Start Game')]}
         done = False
         episode_reward = 0
@@ -260,17 +266,19 @@ class Trainer(object):
             self.update_q_table(state_log[agent_id][-1][0], 'Terminal', state_log[agent_id][-1][1], final_reward, lr=lr)
 
     self.evaluate()
-    epsilon_decay = np.exp(np.log(0.001)/num_episodes)
+
+    epsilon_decay = np.exp(np.log(0.05)/num_episodes)
     epsilon = 1
+    num_episodes = self.flags['num_episodes']
 
     for episode in tqdm(range(num_episodes)):
         # Reset game
-        lr = 0.15
+        lr = 0.001
         observations = self.environment.reset()
 
         # Create agents
         # TO-DO: Change so that epsilon is set based on the number of times a state has been visited
-        agents = [self.agent_class(self.agent_config, epsilon) for _ in range(self.flags['players'])]
+        agents = [self.agent_class(self.agent_config, 0.3) for _ in range(self.flags['players'])]
         state_log = {0: [('X','Start Game')], 1:[('X','Start Game')]}
         done = False
         episode_reward = 0
@@ -324,4 +332,4 @@ if __name__ == "__main__":
     flag = flag[2:]  # Strip leading --.
     flags[flag] = type(flags[flag])(value)
   runner = Trainer(flags)
-  runner.train()
+  runner.play_games(10)
